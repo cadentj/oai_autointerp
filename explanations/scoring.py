@@ -96,6 +96,15 @@ async def _simulate_and_score_sequence(
     return scored_sequence_simulation
 
 
+def default(scored_simulation):
+    return {
+        "tokens" : scored_simulation.simulation.tokens,
+        "expected_activations": scored_simulation.simulation.expected_activations,
+        "ev_correlation_score": scored_simulation.ev_correlation_score,
+        "rsquared_score": scored_simulation.rsquared_score,
+        "absolute_dev_explained_score": scored_simulation.absolute_dev_explained_score,
+    }
+
 def aggregate_scored_sequence_simulations(
     scored_sequence_simulations: list[ScoredSequenceSimulation],
 ) -> ScoredSimulation:
@@ -119,12 +128,17 @@ def aggregate_scored_sequence_simulations(
         all_true_activations, all_expected_values
     )
 
-    scored_sequence_simulations = [s.default() for s in scored_sequence_simulations]
+    scored_sequence_simulations = [default(s) for s in scored_sequence_simulations]
+
+    if np.isnan(ev_correlation_score):
+        ev_correlation_score = "nan" 
+    else:
+        ev_correlation_score = float(ev_correlation_score)
 
     print(scored_sequence_simulation)
     return ScoredSimulation(
         scored_sequence_simulations=scored_sequence_simulations,
-        ev_correlation_score=float(ev_correlation_score),
+        ev_correlation_score=ev_correlation_score,
         rsquared_score=float(rsquared_score),
         absolute_dev_explained_score=float(absolute_dev_explained_score),
     )
