@@ -26,6 +26,7 @@ def correlation_score(
     real_activations: Sequence[float] | np.ndarray,
     predicted_activations: Sequence[float] | np.ndarray,
 ) -> float:
+    print(real_activations, predicted_activations)
     return np.corrcoef(real_activations, predicted_activations)[0, 1]
 
 
@@ -86,7 +87,6 @@ async def _simulate_and_score_sequence(
         activations, simulation, absolute_dev_explained_score_from_sequences
     )
     scored_sequence_simulation = ScoredSequenceSimulation(
-        # expected_activations is actually predicted_activations here
         simulation=simulation,
         true_activations=activations.activations.tolist(),
         ev_correlation_score=score_from_simulation(activations, simulation, correlation_score),
@@ -97,10 +97,19 @@ async def _simulate_and_score_sequence(
 
 
 def default(scored_simulation):
+
+    ev_correlation_score = scored_simulation.ev_correlation_score
+
+    if np.isnan(ev_correlation_score):
+        ev_correlation_score = "nan" 
+    else:
+        ev_correlation_score = float(ev_correlation_score)
+
     return {
         "tokens" : scored_simulation.simulation.tokens,
-        "expected_activations": scored_simulation.simulation.expected_activations,
-        "ev_correlation_score": scored_simulation.ev_correlation_score,
+        "true_activations": scored_simulation.true_activations,
+        "predicted_activations": scored_simulation.simulation.expected_activations,
+        "ev_correlation_score": ev_correlation_score,
         "rsquared_score": scored_simulation.rsquared_score,
         "absolute_dev_explained_score": scored_simulation.absolute_dev_explained_score,
     }
