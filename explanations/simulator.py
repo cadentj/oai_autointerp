@@ -956,8 +956,7 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
 
     async def simulate(
         self,
-        tokens: Sequence[str],
-        echo=False
+        tokens: Sequence[str]
     ) -> SequenceSimulation:
         if self.json_mode:
             prompt = self._make_simulation_prompt_json(
@@ -1003,8 +1002,6 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
             tokens=list(tokens),  # SequenceSimulation expects List type
         )
         logger.debug("result in score_explanation_by_activations is %s", result)
-        if echo:
-            return tokens, response, result
         return result
 
     def _make_simulation_prompt_json(

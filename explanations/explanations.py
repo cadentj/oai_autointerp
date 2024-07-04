@@ -92,6 +92,15 @@ class ScoredSequenceSimulation(FastDataclass):
     absolute_dev_explained_score = 1 - mean(abs(real-predicted))/ mean(abs(real))
     """
 
+    def default(self) -> Optional[float]:
+        return {
+            "tokens" : self.simulation.tokens,
+            "expected_activations": self.simulation.expected_activations,
+            "ev_correlation_score": self.ev_correlation_score,
+            "rsquared_score": self.rsquared_score,
+            "absolute_dev_explained_score": self.absolute_dev_explained_score,
+        }
+
 
 @register_dataclass
 @dataclass

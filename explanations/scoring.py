@@ -86,11 +86,12 @@ async def _simulate_and_score_sequence(
         activations, simulation, absolute_dev_explained_score_from_sequences
     )
     scored_sequence_simulation = ScoredSequenceSimulation(
+        # expected_activations is actually predicted_activations here
         simulation=simulation,
         true_activations=activations.activations.tolist(),
-        ev_correlation_score=float(score_from_simulation(activations, simulation, correlation_score)),
-        rsquared_score=float(rsquared_score),
-        absolute_dev_explained_score=float(absolute_dev_explained_score),
+        ev_correlation_score=score_from_simulation(activations, simulation, correlation_score),
+        rsquared_score=rsquared_score,
+        absolute_dev_explained_score=absolute_dev_explained_score,
     )
     return scored_sequence_simulation
 
@@ -118,11 +119,14 @@ def aggregate_scored_sequence_simulations(
         all_true_activations, all_expected_values
     )
 
+    scored_sequence_simulations = [s.default() for s in scored_sequence_simulations]
+
+    print(scored_sequence_simulation)
     return ScoredSimulation(
         scored_sequence_simulations=scored_sequence_simulations,
-        ev_correlation_score=ev_correlation_score,
-        rsquared_score=rsquared_score,
-        absolute_dev_explained_score=absolute_dev_explained_score,
+        ev_correlation_score=float(ev_correlation_score),
+        rsquared_score=float(rsquared_score),
+        absolute_dev_explained_score=float(absolute_dev_explained_score),
     )
 
 
