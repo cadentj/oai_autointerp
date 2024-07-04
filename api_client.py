@@ -83,7 +83,8 @@ def exponential_backoff(
 class ApiClient:
     """Performs inference using the OpenAI API. Supports response caching and concurrency limits."""
 
-    BASE_API_URL = "https://api.openai.com/v1"
+    # BASE_API_URL = "https://api.openai.com/v1"
+    BASE_API_URL = "https://openrouter.ai/api/v1"
     def __init__(
         self,
         model_name: str,
@@ -110,7 +111,7 @@ class ApiClient:
     ) -> dict[str, Any]:
         api_http_headers = {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + os.getenv("OPENAI_API_KEY"),
+            "Authorization": "Bearer " + os.getenv("OPENROUTER_KEY"),
         }
         if self._cache is not None:
             key = orjson.dumps(kwargs)

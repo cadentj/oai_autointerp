@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import List, Union
 
 import blobfile as bf
-from neuron_explainer.fast_dataclasses import FastDataclass, loads, register_dataclass
-from neuron_explainer.azure import standardize_azure_url
+from ..fast_dataclasses import FastDataclass, loads, register_dataclass
+from ..azure import standardize_azure_url
 import urllib.request
 
 

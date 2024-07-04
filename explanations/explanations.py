@@ -10,8 +10,8 @@ from typing import List, Optional, Union
 
 import blobfile as bf
 import boostedblob as bbb
-from neuron_explainer.activations.activations import NeuronId
-from neuron_explainer.fast_dataclasses import FastDataclass, loads, register_dataclass
+from ..activations.activations import NeuronId
+from ..fast_dataclasses import FastDataclass, loads, register_dataclass
 
 
 class ActivationScale(str, Enum):

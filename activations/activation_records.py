@@ -3,7 +3,7 @@
 import math
 from typing import Optional, Sequence
 
-from neuron_explainer.activations.activations import ActivationRecord
+from .activations import ActivationRecord
 
 UNKNOWN_ACTIVATION_STRING = "unknown"
 

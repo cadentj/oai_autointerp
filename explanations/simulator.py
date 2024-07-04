@@ -11,21 +11,21 @@ from enum import Enum
 from typing import Any, Optional, Sequence, Union
 
 import numpy as np
-from neuron_explainer.activations.activation_records import (
+from ..activations.activation_records import (
     calculate_max_activation,
     format_activation_records,
     format_sequences_for_simulation,
     normalize_activations,
 )
-from neuron_explainer.activations.activations import ActivationRecord
-from neuron_explainer.api_client import ApiClient
-from neuron_explainer.explanations.explainer import EXPLANATION_PREFIX
-from neuron_explainer.explanations.explanations import (
+from ..activations.activations import ActivationRecord
+from ..api_client import ApiClient
+from .explainer import EXPLANATION_PREFIX
+from .explanations import (
     ActivationScale,
     SequenceSimulation,
 )
-from neuron_explainer.explanations.few_shot_examples import FewShotExampleSet
-from neuron_explainer.explanations.prompt_builder import (
+from .few_shot_examples import FewShotExampleSet
+from .prompt_builder import (
     HarmonyMessage,
     PromptBuilder,
     PromptFormat,
@@ -343,6 +343,7 @@ class ExplanationNeuronSimulator(NeuronSimulator):
     async def simulate(
         self,
         tokens: Sequence[str],
+        echo=False
     ) -> SequenceSimulation:
         prompt = self.make_simulation_prompt(tokens)
 
@@ -363,7 +364,7 @@ class ExplanationNeuronSimulator(NeuronSimulator):
         logger.debug("response in score_explanation_by_activations is %s", response)
         result = parse_simulation_response(response, self.prompt_format, tokens)
         logger.debug("result in score_explanation_by_activations is %s", result)
-        return result
+        return prompt, response, result
 
     # TODO(sbills): The current token<tab>activation format can result in improper tokenization.
     # In particular, if the token is itself a tab, we may get a single "\t\t" token rather than two
@@ -661,7 +662,7 @@ def _format_record_for_logprob_free_simulation_json(
 
 
 def _parse_no_logprobs_completion_json(
-    completion: str,
+    completion,
     tokens: Sequence[str],
 ) -> Sequence[float]:
     """
@@ -680,7 +681,7 @@ def _parse_no_logprobs_completion_json(
     zero_prediction = [0] * len(tokens)
 
     try:
-        completion = json.loads(completion)
+        # completion = json.loads(completion)
         if "activations" not in completion:
             logger.error(
                 "The key 'activations' is not in the completion:\n%s\nExpected Tokens:\n%s",
@@ -761,6 +762,11 @@ def _parse_no_logprobs_completion_json(
         )
         return zero_prediction
 
+
+
+def _updated_parse_no_logprobs_completion_json(response):
+    activations = response["activations"]
+    return [activation["activation"] for activation in activations]
 
 def _parse_no_logprobs_completion(
     completion: str,
@@ -858,6 +864,17 @@ def _parse_no_logprobs_completion(
     logger.debug("predicted activations: %s", predicted_activations)
     return predicted_activations
 
+from pydantic import BaseModel
+from typing import List
+
+class Activation(BaseModel):
+    token: str
+    activation: float
+
+class ResponseModel(BaseModel):
+    to_find: str
+    document: str
+    activations: List[Activation]
 
 class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
     """
@@ -916,7 +933,7 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
 
     def __init__(
         self,
-        model_name: str,
+        client,
         explanation: str,
         max_concurrent: Optional[int] = 10,
         json_mode: Optional[bool] = True,
@@ -927,9 +944,11 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
         assert (
             few_shot_example_set != FewShotExampleSet.ORIGINAL
         ), "This simulator doesn't support the ORIGINAL few-shot example set."
-        self.api_client = ApiClient(
-            model_name=model_name, max_concurrent=max_concurrent, cache=cache
-        )
+        # self.api_client = ApiClient(
+        #     model_name=model_name, max_concurrent=max_concurrent, cache=cache
+        # )
+
+        self.client = client
         self.json_mode = json_mode
         self.explanation = explanation
         self.few_shot_example_set = few_shot_example_set
@@ -938,33 +957,42 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
     async def simulate(
         self,
         tokens: Sequence[str],
+        echo=False
     ) -> SequenceSimulation:
         if self.json_mode:
             prompt = self._make_simulation_prompt_json(
                 tokens,
                 self.explanation,
             )
-            response = await self.api_client.make_request(
-                messages=prompt, max_tokens=2000, temperature=0, json_mode=True
+
+            response = await self.client.generate(
+                prompt, max_tokens=2000, temperature=0.0, schema=ResponseModel.model_json_schema()
             )
-            assert len(response["choices"]) == 1
-            choice = response["choices"][0]
-            completion = choice["message"]["content"]
+
+            # with open("/share/u/caden/sae-auto-interp/prompt.json", "w") as f:
+            #     json.dump(response, f)
+
+            # predicted_activations = _updated_parse_no_logprobs_completion_json(response)
+
+            # assert len(response["choices"]) == 1
+            # choice = response["choices"][0]
+            # completion = choice["message"]["content"]
             predicted_activations = _parse_no_logprobs_completion_json(
-                completion, tokens
+                response, tokens
             )
         else:
             prompt = self._make_simulation_prompt(
                 tokens,
                 self.explanation,
             )
-            response = await self.api_client.make_request(
-                messages=prompt, max_tokens=1000, temperature=0
+            response = await self.client.generate(
+                prompt, max_tokens=1000, temperature=0.0
             )
-            assert len(response["choices"]) == 1
-            choice = response["choices"][0]
-            completion = choice["message"]["content"]
-            predicted_activations = _parse_no_logprobs_completion(completion, tokens)
+            predicted_activations = []
+            # assert len(response["choices"]) == 1
+            # choice = response["choices"][0]
+            # completion = choice["message"]["content"]
+            # predicted_activations = _parse_no_logprobs_completion(completion, tokens)
 
         result = SequenceSimulation(
             activation_scale=ActivationScale.SIMULATED_NORMALIZED_ACTIVATIONS,
@@ -975,6 +1003,8 @@ class LogprobFreeExplanationTokenSimulator(NeuronSimulator):
             tokens=list(tokens),  # SequenceSimulation expects List type
         )
         logger.debug("result in score_explanation_by_activations is %s", result)
+        if echo:
+            return tokens, response, result
         return result
 
     def _make_simulation_prompt_json(

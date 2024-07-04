@@ -8,21 +8,21 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Optional, Sequence, Union
 
-from neuron_explainer.activations.activation_records import (
+from ..activations.activation_records import (
     calculate_max_activation,
     format_activation_records,
     non_zero_activation_proportion,
 )
-from neuron_explainer.activations.activations import ActivationRecord
-from neuron_explainer.api_client import ApiClient
-from neuron_explainer.explanations.few_shot_examples import FewShotExampleSet
-from neuron_explainer.explanations.prompt_builder import (
+from ..activations.activations import ActivationRecord
+from ..api_client import ApiClient
+from .few_shot_examples import FewShotExampleSet
+from .prompt_builder import (
     HarmonyMessage,
     PromptBuilder,
     PromptFormat,
     Role,
 )
-from neuron_explainer.explanations.token_space_few_shot_examples import (
+from .token_space_few_shot_examples import (
     TokenSpaceFewShotExampleSet,
 )
 
@@ -72,6 +72,9 @@ HARMONY_V4_MODELS = [
     "gpt-4o-2024-05-13",
     "gpt-4-1106-preview",
     "gpt-4-turbo-2024-04-09",
+    "meta-llama/llama-3-70b-instruct",
+    "meta-llama/llama-3-8b-instruct",
+    "nousresearch/hermes-2-pro-llama-3-8b"
 ]
 
 
@@ -113,6 +116,7 @@ class NeuronExplainer(ABC):
         max_tokens: int = 60,
         temperature: float = 1.0,
         top_p: float = 1.0,
+        echo=False,
         **prompt_kwargs: Any,
     ) -> list[Any]:
         """Generate explanations based on subclass-specific input data."""
@@ -148,6 +152,8 @@ class NeuronExplainer(ABC):
         else:
             raise ValueError(f"Unhandled prompt format {self.prompt_format}")
 
+        if echo:
+            return prompt, response, self.postprocess_explanations(explanations, prompt_kwargs)
         return self.postprocess_explanations(explanations, prompt_kwargs)
 
     @abstractmethod

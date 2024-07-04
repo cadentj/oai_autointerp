@@ -16,9 +16,9 @@ from abc import abstractmethod
 from typing import Optional, Sequence
 
 import numpy as np
-from neuron_explainer.activations.activations import ActivationRecord
-from neuron_explainer.explanations.explanations import ActivationScale
-from neuron_explainer.explanations.simulator import NeuronSimulator, SequenceSimulation
+from ..activations.activations import ActivationRecord
+from ..explanations.explanations import ActivationScale
+from ..explanations.simulator import NeuronSimulator, SequenceSimulation
 from sklearn import linear_model
 
 
@@ -98,7 +98,7 @@ class CalibratedNeuronSimulator(NeuronSimulator):
     def apply_calibration(self, values: Sequence[float]) -> list[float]:
         """Apply the learned calibration to a sequence of values."""
 
-    async def simulate(self, tokens: Sequence[str]) -> SequenceSimulation:
+    async def simulate(self, tokens: Sequence[str], echo=False) -> SequenceSimulation:
         uncalibrated_seq_simulation = await self.uncalibrated_simulator.simulate(tokens)
         calibrated_activations = self.apply_calibration(
             uncalibrated_seq_simulation.expected_activations

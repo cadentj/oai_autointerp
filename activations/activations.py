@@ -8,8 +8,8 @@ from typing import List, Optional, Union
 import urllib.request
 import blobfile as bf
 import boostedblob as bbb
-from neuron_explainer.fast_dataclasses import FastDataclass, loads, register_dataclass
-from neuron_explainer.azure import standardize_azure_url
+from ..fast_dataclasses import FastDataclass, loads, register_dataclass
+from ..azure import standardize_azure_url
 
 
 @register_dataclass

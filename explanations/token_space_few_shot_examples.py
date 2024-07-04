@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
-from neuron_explainer.fast_dataclasses import FastDataclass
+from ..fast_dataclasses import FastDataclass
 
 
 @dataclass

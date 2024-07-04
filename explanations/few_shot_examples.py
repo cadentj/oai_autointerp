@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
 
-from neuron_explainer.activations.activations import ActivationRecord
-from neuron_explainer.fast_dataclasses import FastDataclass
+from ..activations.activations import ActivationRecord
+from ..fast_dataclasses import FastDataclass
 
 
 @dataclass

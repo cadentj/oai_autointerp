@@ -87,10 +87,10 @@ async def _simulate_and_score_sequence(
     )
     scored_sequence_simulation = ScoredSequenceSimulation(
         simulation=simulation,
-        true_activations=activations.activations,
-        ev_correlation_score=score_from_simulation(activations, simulation, correlation_score),
-        rsquared_score=rsquared_score,
-        absolute_dev_explained_score=absolute_dev_explained_score,
+        true_activations=activations.activations.tolist(),
+        ev_correlation_score=float(score_from_simulation(activations, simulation, correlation_score)),
+        rsquared_score=float(rsquared_score),
+        absolute_dev_explained_score=float(absolute_dev_explained_score),
     )
     return scored_sequence_simulation
 
@@ -143,7 +143,15 @@ async def simulate_and_score(
             for activation_record in activation_records
         ]
     )
-    return aggregate_scored_sequence_simulations(scored_sequence_simulations)
+
+    # with open('test.txt', 'w') as f:
+    #     f.write(str(scored_sequence_simulations))
+    # return scored_sequence_simulations
+
+
+    val = aggregate_scored_sequence_simulations(scored_sequence_simulations)
+    print(val)
+    return val
 
 
 async def make_simulator_and_score(
