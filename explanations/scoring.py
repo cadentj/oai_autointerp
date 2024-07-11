@@ -26,7 +26,6 @@ def correlation_score(
     real_activations: Sequence[float] | np.ndarray,
     predicted_activations: Sequence[float] | np.ndarray,
 ) -> float:
-    print(real_activations, predicted_activations)
     return np.corrcoef(real_activations, predicted_activations)[0, 1]
 
 
@@ -95,15 +94,17 @@ async def _simulate_and_score_sequence(
     )
     return scored_sequence_simulation
 
+def fix_nan(val):
+    if np.isnan(val):
+        return "nan"
+    else:
+        return float(val)
 
 def default(scored_simulation):
 
     ev_correlation_score = scored_simulation.ev_correlation_score
 
-    if np.isnan(ev_correlation_score):
-        ev_correlation_score = "nan" 
-    else:
-        ev_correlation_score = float(ev_correlation_score)
+    ev_correlation_score = fix_nan(ev_correlation_score)
 
     return {
         "tokens" : scored_simulation.simulation.tokens,
@@ -139,12 +140,8 @@ def aggregate_scored_sequence_simulations(
 
     scored_sequence_simulations = [default(s) for s in scored_sequence_simulations]
 
-    if np.isnan(ev_correlation_score):
-        ev_correlation_score = "nan" 
-    else:
-        ev_correlation_score = float(ev_correlation_score)
+    ev_correlation_score = fix_nan(ev_correlation_score)
 
-    print(scored_sequence_simulation)
     return ScoredSimulation(
         scored_sequence_simulations=scored_sequence_simulations,
         ev_correlation_score=ev_correlation_score,
@@ -177,7 +174,6 @@ async def simulate_and_score(
 
 
     val = aggregate_scored_sequence_simulations(scored_sequence_simulations)
-    print(val)
     return val
 
 
