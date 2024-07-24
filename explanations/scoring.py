@@ -5,17 +5,17 @@ import logging
 from typing import Any, Callable, Coroutine, Sequence
 
 import numpy as np
-from neuron_explainer.activations.activations import ActivationRecord
-from neuron_explainer.explanations.calibrated_simulator import (
+from ..activations.activations import ActivationRecord
+from ..explanations.calibrated_simulator import (
     CalibratedNeuronSimulator,
     LinearCalibratedNeuronSimulator,
 )
-from neuron_explainer.explanations.explanations import (
+from ..explanations.explanations import (
     ScoredSequenceSimulation,
     ScoredSimulation,
     SequenceSimulation,
 )
-from neuron_explainer.explanations.simulator import ExplanationNeuronSimulator, NeuronSimulator
+from ..explanations.simulator import ExplanationNeuronSimulator, NeuronSimulator
 
 
 def flatten_list(list_of_lists: Sequence[Sequence[Any]]) -> list[Any]:
