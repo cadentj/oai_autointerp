@@ -31,6 +31,7 @@ from .prompt_builder import (
     PromptFormat,
     Role,
 )
+from ...clients.client import Client
 
 logger = logging.getLogger(__name__)
 
@@ -208,20 +209,21 @@ def parse_simulation_response(
         prompt_format: how the prompt was formatted
         tokens: list of tokens as strings in the sequence where the neuron is being simulated
     """
-    choice = response["choices"][0]
+    choice = response.choices[0]
     if prompt_format == PromptFormat.HARMONY_V4:
-        text = choice["message"]["content"]
+        text = choice.message.content
     elif prompt_format in [
         PromptFormat.NONE,
         PromptFormat.INSTRUCTION_FOLLOWING,
     ]:
-        text = choice["text"]
+        text = choice.text
     else:
         raise ValueError(f"Unhandled prompt format {prompt_format}")
-    response_tokens = choice["logprobs"]["tokens"]
-    choice["logprobs"]["token_logprobs"]
-    top_logprobs = choice["logprobs"]["top_logprobs"]
-    token_text_offset = choice["logprobs"]["text_offset"]
+    
+    response_tokens = choice.logprobs.tokens
+    choice.logprobs.token_logprobs
+    top_logprobs = choice.logprobs.top_logprobs
+    token_text_offset = choice.logprobs.text_offset
     # This only works because the sequence "<start>" tokenizes into multiple tokens if it appears in
     # a text sequence in the prompt.
     scoring_start = text.rfind("<start>")
@@ -296,7 +298,7 @@ def parse_simulation_response(
                     [float(v) for v in current_distribution_values]
                 )
                 distribution_probabilities.append(current_distribution_probabilities)
-                expected_values.append(expected_value)
+                expected_values.append(float(expected_value))
 
     return SequenceSimulation(
         tokens=original_sequence_tokens,
@@ -326,16 +328,12 @@ class ExplanationNeuronSimulator(NeuronSimulator):
 
     def __init__(
         self,
-        model_name: str,
+        client: Client,
         explanation: str,
-        max_concurrent: Optional[int] = 10,
         few_shot_example_set: FewShotExampleSet = FewShotExampleSet.ORIGINAL,
-        prompt_format: PromptFormat = PromptFormat.INSTRUCTION_FOLLOWING,
-        cache: bool = False,
+        prompt_format: PromptFormat = PromptFormat.NONE,
     ):
-        self.api_client = ApiClient(
-            model_name=model_name, max_concurrent=max_concurrent, cache=cache
-        )
+        self.client = client
         self.explanation = explanation
         self.few_shot_example_set = few_shot_example_set
         self.prompt_format = prompt_format
@@ -343,7 +341,6 @@ class ExplanationNeuronSimulator(NeuronSimulator):
     async def simulate(
         self,
         tokens: Sequence[str],
-        echo=False
     ) -> SequenceSimulation:
         prompt = self.make_simulation_prompt(tokens)
 
@@ -359,12 +356,14 @@ class ExplanationNeuronSimulator(NeuronSimulator):
         else:
             assert isinstance(prompt, str)
             generate_kwargs["prompt"] = prompt
+        generate_kwargs["raw"] = True
+        generate_kwargs["use_legacy_api"] = True
 
-        response = await self.api_client.make_request(**generate_kwargs)
+        response = await self.client.generate(**generate_kwargs)
         logger.debug("response in score_explanation_by_activations is %s", response)
         result = parse_simulation_response(response, self.prompt_format, tokens)
         logger.debug("result in score_explanation_by_activations is %s", result)
-        return prompt, response, result
+        return result
 
     # TODO(sbills): The current token<tab>activation format can result in improper tokenization.
     # In particular, if the token is itself a tab, we may get a single "\t\t" token rather than two

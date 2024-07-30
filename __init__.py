@@ -2,7 +2,8 @@ from .explanations import (
     UncalibratedNeuronSimulator, 
     TokenActivationPairExplainer, 
     simulate_and_score, 
-    LogprobFreeExplanationTokenSimulator
+    LogprobFreeExplanationTokenSimulator,
+    ExplanationNeuronSimulator,
 )
 
 from .activations import (
