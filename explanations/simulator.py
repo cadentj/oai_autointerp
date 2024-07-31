@@ -117,85 +117,6 @@ def compute_predicted_activation_stats_for_token(
     )
 
 
-# Adapted from tether/tether/core/encoder.py.
-def convert_to_byte_array(s: str) -> bytearray:
-    byte_array = bytearray()
-    assert s.startswith("bytes:"), s
-    s = s[6:]
-    while len(s) > 0:
-        if s[0] == "\\":
-            # Hex encoding.
-            assert s[1] == "x"
-            assert len(s) >= 4
-            byte_array.append(int(s[2:4], 16))
-            s = s[4:]
-        else:
-            # Regular ascii encoding.
-            byte_array.append(ord(s[0]))
-            s = s[1:]
-    return byte_array
-
-
-def handle_byte_encoding(
-    response_tokens: Sequence[str], merged_response_index: int
-) -> tuple[str, int]:
-    """
-    Handle the case where the current token is a sequence of bytes. This may involve merging
-    multiple response tokens into a single token.
-    """
-    response_token = response_tokens[merged_response_index]
-    if response_token.startswith("bytes:"):
-        byte_array = bytearray()
-        while True:
-            byte_array = convert_to_byte_array(response_token) + byte_array
-            try:
-                # If we can decode the byte array as utf-8, then we're done.
-                response_token = byte_array.decode("utf-8")
-                break
-            except UnicodeDecodeError:
-                # If not, then we need to merge the previous response token into the byte
-                # array.
-                merged_response_index -= 1
-                response_token = response_tokens[merged_response_index]
-    return response_token, merged_response_index
-
-
-def was_token_split(
-    current_token: str, response_tokens: Sequence[str], start_index: int
-) -> bool:
-    """
-    Return whether current_token (a token from the subject model) was split into multiple tokens by
-    the simulator model (as represented by the tokens in response_tokens). start_index is the index
-    in response_tokens at which to begin looking backward to form a complete token. It is usually
-    the first token *before* the delimiter that separates the token from the normalized activation,
-    barring some unusual cases.
-
-    This mainly happens if the subject model uses a different tokenizer than the simulator model.
-    But it can also happen in cases where Unicode characters are split. This function handles both
-    cases.
-    """
-    merged_response_tokens = ""
-    merged_response_index = start_index
-    while len(merged_response_tokens) < len(current_token):
-        response_token = response_tokens[merged_response_index]
-        response_token, merged_response_index = handle_byte_encoding(
-            response_tokens, merged_response_index
-        )
-        merged_response_tokens = response_token + merged_response_tokens
-        merged_response_index -= 1
-    # It's possible that merged_response_tokens is longer than current_token at this point,
-    # since the between-lines delimiter may have been merged into the original token. But it
-    # should always be the case that merged_response_tokens ends with current_token.
-    assert merged_response_tokens.endswith(current_token)
-    num_merged_tokens = start_index - merged_response_index
-    token_was_split = num_merged_tokens > 1
-    if token_was_split:
-        logger.debug(
-            "Warning: token from the subject model was split into 2+ tokens by the simulator model."
-        )
-    return token_was_split
-
-
 def parse_simulation_response(
     response: dict[str, Any],
     prompt_format: PromptFormat,
@@ -220,88 +141,44 @@ def parse_simulation_response(
     else:
         raise ValueError(f"Unhandled prompt format {prompt_format}")
     
-    response_tokens = choice.logprobs.tokens
-    choice.logprobs.token_logprobs
-    top_logprobs = choice.logprobs.top_logprobs
-    token_text_offset = choice.logprobs.text_offset
-    # This only works because the sequence "<start>" tokenizes into multiple tokens if it appears in
+    # (atmallen) The original code seems overly complicated. I think we just need a map from `text` index to response token position
+    # and then we can traverse the `text` one '<tok>\tunknown\n' match at a time
+    
+    # This only works because the sequence "\n<start>\n" tokenizes into multiple tokens if it appears in
     # a text sequence in the prompt.
-    scoring_start = text.rfind("<start>")
+    current_text_idx = text.rfind("\n<start>\n") + len("\n<start>")
+    if current_text_idx == -1:
+        raise Exception(f"No scoring start found in {text}")
+    
     expected_values = []
-    original_sequence_tokens: list[str] = []
-    distribution_values: list[list[float]] = []
-    distribution_probabilities: list[list[float]] = []
-    for i in range(2, len(response_tokens)):
-        if len(original_sequence_tokens) == len(tokens):
-            # Make sure we haven't hit some sort of off-by-one error.
-            # TODO(sbills): Generalize this to handle different tokenizers.
-            reached_end = (
-                response_tokens[i + 1] == "<" and response_tokens[i + 2] == "end"
-            )
-            assert reached_end, f"{response_tokens[i-3:i+3]}"
-            break
-        if token_text_offset[i] >= scoring_start:
-            # We're looking for the first token after a tab. This token should be the text
-            # "unknown" if hide_activations=True or a normalized activation (0-10) otherwise.
-            # If it isn't, that means that the tab is not appearing as a delimiter, but rather
-            # as a token, in which case we should move on to the next response token.
-            if response_tokens[i - 1] == "\t":
-                if response_tokens[i] != "unknown":
-                    logger.debug(
-                        "Ignoring tab token that is not followed by an 'unknown' token."
-                    )
-                    continue
+    distribution_values = []
+    distribution_probabilities = []
+    for subject_token in tokens:
+        assert text[current_text_idx:].startswith(f"\n{subject_token}\tunknown")
+        u_idx = current_text_idx + len(f"\n{subject_token}\t")
+        
+        # Ideally, the activation token is not merged with either the \t or the \n
+        # This seems very likely (because merging would have to be caused by the token preceding \t) 
+        # so I am willing to just assert it
+        # We also assume that all integers 0-10 have dedicated tokens
+        assert u_idx in choice.logprobs.text_offset, "tab token was merged with the unknown token"
+        # in the OpenAI API, the logprobs are for the *current* token, so no need to add 1
+        response_token_idx = choice.logprobs.text_offset.index(u_idx)
 
-                # j represents the index of the token in a "token<tab>activation" line, barring
-                # one of the unusual cases handled below.
-                j = i - 2
+        (
+            p_by_distribution_value,
+            expected_value,
+        ) = compute_predicted_activation_stats_for_token(
+            choice.logprobs.top_logprobs[response_token_idx],
+        )
+        distribution_values.append(list(p_by_distribution_value.keys()))
+        distribution_probabilities.append(list(p_by_distribution_value.values()))
+        expected_values.append(float(expected_value))
 
-                current_token = tokens[len(original_sequence_tokens)]
-                if current_token == response_tokens[j] or was_token_split(
-                    current_token, response_tokens, j
-                ):
-                    # We're in the normal case where the tokenization didn't throw off the
-                    # formatting or in the token-was-split case, which we handle the usual way.
-                    current_top_logprobs = top_logprobs[i]
-
-                    (
-                        norm_probabilities_by_distribution_value,
-                        expected_value,
-                    ) = compute_predicted_activation_stats_for_token(
-                        current_top_logprobs,
-                    )
-                    current_distribution_values = list(
-                        norm_probabilities_by_distribution_value.keys()
-                    )
-                    current_distribution_probabilities = list(
-                        norm_probabilities_by_distribution_value.values()
-                    )
-                else:
-                    # We're in a case where the tokenization resulted in a newline being folded into
-                    # the token. We can't do our usual prediction of activation stats for the token,
-                    # since the model did not observe the original token. Instead, we use dummy
-                    # values. See the TODO elsewhere in this file about coming up with a better
-                    # prompt format that avoids this situation.
-                    newline_folded_into_token = "\n" in response_tokens[j]
-                    assert (
-                        newline_folded_into_token
-                    ), f"`{current_token=}` {response_tokens[j-3:j+3]=}"
-                    logger.debug(
-                        "Warning: newline before a token<tab>activation line was folded into the token"
-                    )
-                    current_distribution_values = []
-                    current_distribution_probabilities = []
-                    expected_value = 0.0
-
-                original_sequence_tokens.append(current_token)
-                distribution_values.append(
-                    [float(v) for v in current_distribution_values]
-                )
-                distribution_probabilities.append(current_distribution_probabilities)
-                expected_values.append(float(expected_value))
-
+        current_text_idx += len(f"\n{subject_token}\tunknown")
+    
     return SequenceSimulation(
-        tokens=original_sequence_tokens,
+        tokens=list(tokens),
         expected_activations=expected_values,
         activation_scale=ActivationScale.SIMULATED_NORMALIZED_ACTIVATIONS,
         distribution_values=distribution_values,
